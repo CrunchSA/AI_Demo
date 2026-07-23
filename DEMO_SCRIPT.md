@@ -115,7 +115,7 @@ kubectl exec -it deployment/streamlit-app -- \
 ### Narration & Actions
 
 **Intro**:
-> "Now we'll showcase the core of our architecture: Ollama has access to the full knowledge base with real data. But Thales CRDP controls the output. Every response from the LLM is tokenized, and only authorized users can reveal the cleartext. Authorization is evaluated **per-request** based on user identity."
+> "Now we'll showcase the core of our architecture: Ollama has only access to the knowledge base with tokenized data. But Thales CRDP controls the output. Every response from the LLM is tokenized, and only authorized users can reveal the cleartext. Authorization is evaluated **per-request** based on user identity."
 
 **Action 1**: Select user persona
 ```
@@ -358,6 +358,9 @@ Raw Output from LLM: "[Contains only tokenized values, no plaintext PII]"
 
 **Q: Doesn't the middleware become a single point of failure?**
 > A: Not with proper scaling. The Streamlit pod can be horizontally scaled (2-N replicas) behind a load balancer. Session state is cached (Redis). CRDP is the true single point, but it's a dedicated, hardened HSM appliance designed for 99.99% uptime. You can also federation multiple CipherTrust instances.
+
+**Q: Why does the demo re-tokenize the entire knowledge base on every prompt? Is that how it works in production?**
+> A: For this demo, we intentionally re-tokenize the knowledge base on every chat submission so that you can see the live "Protect" HTTP wire logs generated in real-time. This makes the data flow visible. In a production environment, you would never do this. Instead, you would use a Vector Database (RAG) to only retrieve relevant pre-tokenized snippets, or bake the tokenized data directly into the LLM's system prompt (e.g., using an Ollama `Modelfile`) to eliminate the overhead of sending the full data over the network repeatedly.
 
 **Q: What's the performance impact?**
 > A: ~100-200ms per query for CRDP calls (network + API). For a typical LLM inference taking 500-3000ms, the overhead is ~5-10%. With batching and caching, it becomes negligible.

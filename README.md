@@ -120,10 +120,11 @@ Visit [http://localhost:8501](http://localhost:8501) in your browser.
 
 ### Data Flow Phases
 
-**Phase 1 & 2: Context Loading & Sanitization**
+**Phase 1 & 2: Context Loading & Prompt/Knowledge Sanitization**
 - Middleware reads enterprise knowledge base from CTE volume  
-- Middleware calls CRDP `/protect` to sanitize the user's prompt and the knowledge base
-- Sanitized RAG context (with fake tokens like "572-39-1148") injected into LLM system prompt
+- Middleware intercepts the initial user prompt and calls CRDP `/protect` to sanitize any sensitive data before it moves over the network
+- Middleware also calls CRDP `/protect` to sanitize the loaded knowledge base context
+- Sanitized RAG context (with fake tokens like "572-39-1148") and the sanitized user prompt are injected into the LLM system prompt
 
 **Phase 3: LLM Inference (Untrusted Zone)**
 - Ollama processes only the tokenized knowledge base and prompt
