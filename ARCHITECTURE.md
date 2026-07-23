@@ -2,6 +2,8 @@
 
 This document provides a comprehensive technical deep dive into the zero-trust AI security architecture used in this demo.
 
+Example paths, URLs, usernames, tokens, and policy names in this document are illustrative. Replace them with the values used by your own container platform, storage layout, identity provider, and CipherTrust configuration.
+
 ## Overview
 
 The **CipherTrust AI Perimeter** is a defense-in-depth system that protects sensitive data throughout the entire generative AI pipeline. It combines:
@@ -17,7 +19,7 @@ The **CipherTrust AI Perimeter** is a defense-in-depth system that protects sens
 
 **Component**: Thales Transparent Encryption (CTE)
 
-**Location**: Host filesystem (`/opt/raw-llm-data/`)
+**Location**: Host filesystem (example: `/path/to/your/encrypted-knowledge/`)
 
 **Function**:
 - Encrypts all files on the underlying Linux host
@@ -28,11 +30,11 @@ The **CipherTrust AI Perimeter** is a defense-in-depth system that protects sens
 **Example**:
 ```bash
 # Root user attempts to read encrypted file
-sudo cat /opt/raw-llm-data/enterprise_knowledge.txt
+sudo cat /path/to/your/encrypted-knowledge/enterprise_knowledge.txt
 # Output: [Permission Denied] or [Unreadable binary data]
 
 # Only the Streamlit container can decrypt
-docker exec streamlit-app cat /data/enterprise_knowledge.txt
+docker exec <your-streamlit-container-name> cat /data/enterprise_knowledge.txt
 # Output: [Readable plaintext - enterprise_knowledge.txt contents]
 ```
 
@@ -45,6 +47,8 @@ docker exec streamlit-app cat /data/enterprise_knowledge.txt
 - Encryption keys held in CipherTrust Manager (never in application code)
 - All transactions logged and auditable
 
+The sample service names shown below assume Kubernetes DNS, but the same pattern works with any reachable CRDP and LLM endpoints.
+
 **Endpoints**:
 - `/v1/protect`: Encrypt plaintext → Token
 - `/v1/reveal`: Decrypt token → Cleartext (with identity validation)
@@ -52,9 +56,9 @@ docker exec streamlit-app cat /data/enterprise_knowledge.txt
 **Payload Format** (Protect):
 ```json
 {
-  "protection_policy_name": "llm-ssn-tokenize-policy",
+  "protection_policy_name": "your-policy-name",
   "data": "000-88-9999",
-  "username": "Alice"
+  "username": "authorized-user"
 }
 ```
 
@@ -217,7 +221,7 @@ Matches: ["000-88-9999"]
 
 **Step 3**: Call CRDP /protect for each match
 ```
-POST http://crdp-service:8090/v1/protect
+POST http://<your-crdp-service-name>:8090/v1/protect
 {
   "protection_policy_name": "llm-ssn-tokenize-policy",
   "data": "000-88-9999",
@@ -268,7 +272,7 @@ Sanitized Knowledge:
 
 **Step 1**: Send to Ollama
 ```
-POST http://ollama-service:11434/api/chat
+POST http://<your-ollama-service-name>:11434/api/chat
 [Prompt with SANITIZED knowledge base]
 ```
 
@@ -305,7 +309,7 @@ Matches: ["572-39-1148"]
 
 **Step 3**: Call CRDP /reveal with Alice's identity to get cleartext for display
 ```
-POST http://crdp-service:8090/v1/reveal
+POST http://<your-crdp-service-name>:8090/v1/reveal
 {
   "protection_policy_name": "llm-ssn-tokenize-policy",
   "protected_data": "572-39-1148",

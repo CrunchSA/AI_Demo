@@ -20,11 +20,13 @@ A **zero-trust, enterprise-grade conversational AI application** that demonstrat
 - Streamlit
 - Ollama (or Docker image)
 
-### Production Deployment (RKE2 Kubernetes)
-- RKE2 cluster with CTE storage provisioning
+### Production Deployment (Kubernetes)
+- Kubernetes cluster with CTE storage provisioning
 - Thales CipherTrust Manager (with CRDP policies configured)
 - Container runtime (containerd)
 - Kubernetes secrets for CRDP API endpoints
+
+Replace all example hostnames, policy names, namespaces, storage paths, and user-role labels in this repository with values from your own environment. The documentation uses sample values to show the integration pattern, not to prescribe a single required infrastructure layout.
 
 ## 🚀 Quick Start
 
@@ -166,11 +168,19 @@ See [DEMO_SCRIPT.md](DEMO_SCRIPT.md) for a complete live demonstration walkthrou
 ## 🎬 Deployment
 
 ### Local Development
+   The README's Docker instructions are for a local demo workflow on a single machine. They use `docker-compose.yml` to run the Streamlit app and Ollama together, mount a local `./data` directory, and expose the UI on `localhost:8501`.
+
 ```bash
 docker-compose up --build
 ```
 
-### Kubernetes/RKE2 Production
+### Kubernetes Production
+   The Kubernetes guidance in [DEPLOYMENT.md](DEPLOYMENT.md) is a separate production-oriented path for Kubernetes clusters. It assumes additional infrastructure that the local Docker flow does not require, including a pushed container image, Kubernetes Deployments and Services, PV/PVC storage, ConfigMaps and Secrets, network policies, and optional ingress/monitoring.
+
+   Note: [DEPLOYMENT.md](DEPLOYMENT.md) contains example manifest snippets and operational steps; it is not the same as the local Compose setup and does not replace `docker-compose.yml` for local development.
+
+   All Kubernetes examples use illustrative values such as `default` namespaces, cluster-local DNS names, sample host paths, and example policy names. Treat them as templates and replace them with the names, paths, URLs, credentials, and access-control labels used in your own environment.
+
 See [DEPLOYMENT.md](DEPLOYMENT.md) for:
 - CTE volume provisioning
 - Persistent Volume Claims (PVCs)
@@ -182,11 +192,13 @@ See [DEPLOYMENT.md](DEPLOYMENT.md) for:
 
 ### Environment Variables
 
-| Variable | Default | Purpose |
+The values below are examples. Use the actual endpoints, policy names, model names, and storage paths that exist in your environment.
+
+| Variable | Example | Purpose |
 |----------|---------|---------|
-| `CRDP_URL` | `http://crdp-service.default.svc.cluster.local:8090/v1` | Thales CRDP API endpoint |
-| `CRDP_POLICY` | `llm-ssn-tokenize-policy` | Policy name in CipherTrust Manager |
-| `OLLAMA_URL` | `http://ollama-service.llm-security-demo.svc.cluster.local:11434/api/chat` | Ollama chat API endpoint |
+| `CRDP_URL` | `http://your-crdp-host:8090/v1` | Thales CRDP API endpoint |
+| `CRDP_POLICY` | `your-policy-name` | Policy name in CipherTrust Manager |
+| `OLLAMA_URL` | `http://your-ollama-host:11434/api/chat` | Ollama chat API endpoint |
 | `MODEL_NAME` | `qwen2.5:1.5b` | LLM model to use |
 | `KNOWLEDGE_PATH` | `/data/enterprise_knowledge.txt` | Path to RAG knowledge base |
 
@@ -213,6 +225,8 @@ See [DEPLOYMENT.md](DEPLOYMENT.md) for:
    - Bind username field to User Set evaluation
    - Set reveal behavior per user role
 
+The user names and role descriptions shown in this demo are examples only. Map them to the identities, groups, and policy outcomes defined in your own access model.
+
 ## 📝 File Structure
 
 ```
@@ -225,7 +239,7 @@ ciphertrust-ai-perimeter/
 ├── .gitignore                  # Git ignore rules
 ├── README.md                   # This file
 ├── ARCHITECTURE.md             # Technical deep dive
-├── DEPLOYMENT.md               # RKE2 deployment guide
+├── DEPLOYMENT.md               # Kubernetes deployment guide
 ├── DEMO_SCRIPT.md              # Live demo walkthrough
 ├── LICENSE                     # Open source license
 ├── data/
@@ -250,7 +264,7 @@ error: model 'qwen2.5:1.5b' not found
 ```
 **Solution**: Pull the model first:
 ```bash
-docker exec ollama-llm-service ollama pull qwen2.5:1.5b
+docker exec <your-ollama-container-name> ollama pull <your-model-name>
 ```
 
 ### All Users See Masked Data
@@ -267,7 +281,7 @@ docker exec ollama-llm-service ollama pull qwen2.5:1.5b
 - [Thales CipherTrust Manager Docs](https://supportportal.thalesgroup.com/csm)
 - [Ollama Model Library](https://ollama.ai/library)
 - [Streamlit Documentation](https://docs.streamlit.io)
-- [Kubernetes RKE2 Docs](https://docs.rke2.io)
+- [Kubernetes Documentation](https://kubernetes.io/docs/)
 
 ## 🤝 Contributing
 

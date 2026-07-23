@@ -2,6 +2,8 @@
 
 This script is designed to showcase the complete zero-trust AI security architecture to technical and non-technical audiences. Follow the flow, read the talking points, and demonstrate the security layering in action.
 
+All user names, host names, service names, policy names, file paths, and response examples in this script are illustrative. Replace them with the identities, commands, URLs, and storage paths that match your own deployment before using this as a live runbook.
+
 ## Demo Objectives
 
 ✅ Prove that rogue admins cannot access encrypted data  
@@ -16,7 +18,7 @@ This script is designed to showcase the complete zero-trust AI security architec
 
 ### Prerequisites
 - [ ] Streamlit application running (`http://localhost:8501`)
-- [ ] SSH access to RKE2 node or host server
+- [ ] SSH access to the Kubernetes node or host server that holds the protected data
 - [ ] Thales CipherTrust Manager accessible
 - [ ] Two browser windows/tabs open:
   - Tab 1: Streamlit UI
@@ -27,10 +29,10 @@ This script is designed to showcase the complete zero-trust AI security architec
 ### Knowledge Base Verification
 ```bash
 # SSH into the node
-ssh root@your-rke2-node
+ssh <your-admin-user>@<your-node-host>
 
 # Verify knowledge base exists and is encrypted
-sudo cat /opt/raw-llm-data/enterprise_knowledge.txt
+sudo cat /path/to/your/encrypted-knowledge/enterprise_knowledge.txt
 # Should show: [Permission Denied] or encrypted binary data
 
 # Only Streamlit pod can decrypt
@@ -46,7 +48,7 @@ kubectl exec -it deployment/ollama-service -- ollama pull qwen2.5:1.5b
 
 # Test CRDP connectivity
 kubectl exec -it deployment/streamlit-app -- \
-  curl http://crdp-service:8090/v1/protect -d '{}' 2>/dev/null
+  curl http://<your-crdp-service-name>:8090/v1/protect -d '{}' 2>/dev/null
 # Should respond (even with error payload)
 ```
 
@@ -73,10 +75,10 @@ whoami
 # Output: root
 
 # List encrypted directory
-ls -la /opt/raw-llm-data/
+ls -la /path/to/your/encrypted-knowledge/
 
 # Attempt to read
-sudo cat /opt/raw-llm-data/enterprise_knowledge.txt
+sudo cat /path/to/your/encrypted-knowledge/enterprise_knowledge.txt
 ```
 
 **Expected Output**:
@@ -88,6 +90,8 @@ Permission Denied
 
 **Talking Point**:
 > "Notice: Even though I'm logged in as **root** with complete system privileges, the CTE encryption layer completely blocks access to this file. The file is encrypted at the filesystem level with a key that's tied to the specific **containerd signature** of our authorized Kubernetes deployment. Rogue admins, external attackers, or anyone without the proper deployment credentials is completely blind to this data."
+
+> "If your environment uses a different trust binding than the one described here, update the narration to match your actual CTE enforcement model."
 
 **Action 2**: Show that the Streamlit middleware DOES have access
 ```bash
@@ -198,6 +202,8 @@ Response Payload:
 > "**Transaction #2 - The Reveal Call**: The tokenized response is sent back to the client (Alice's browser). But we don't just show her the token. We immediately call CRDP's `/reveal` endpoint to evaluate whether she's authorized to see the cleartext."
 
 > "We passed **'Alice'** as the username. The Thales CipherTrust Manager evaluated its access policies and said, 'Alice is in the Full_Access_Auditors group. Grant her cleartext.' CRDP returned the real SSN: **000-88-9999**."
+
+> "In your environment, substitute the real principal name, group name, and policy outcome returned by your access controls."
 
 > "If this had been **'Bob'** instead, CRDP would have returned **'XXX-XX-9999'** (masked). If it had been **'Malicious_Actor'**, the response would be **[Access Denied: 403]**. Same tokenized response from CRDP protect, but different reveal output based on identity."
 
@@ -363,7 +369,7 @@ Raw Output from LLM: "[Contains only tokenized values, no plaintext PII]"
 > A: For this demo, we intentionally re-tokenize the knowledge base on every chat submission so that you can see the live "Protect" HTTP wire logs generated in real-time. This makes the data flow visible. In a production environment, you would never do this. Instead, you would use a Vector Database (RAG) to only retrieve relevant pre-tokenized snippets, or bake the tokenized data directly into the LLM's system prompt (e.g., using an Ollama `Modelfile`) to eliminate the overhead of sending the full data over the network repeatedly.
 
 **Q: What's the performance impact?**
-> A: ~100-200ms per query for CRDP calls (network + API). For a typical LLM inference taking 500-3000ms, the overhead is ~5-10%. With batching and caching, it becomes negligible.
+> A: Performance depends on your network latency, policy complexity, model size, and caching strategy. Measure it in your own environment rather than assuming the example numbers from this script.
 
 **Q: How do you handle key rotation?**
 > A: All key management is handled by Thales CipherTrust. When keys rotate, CRDP transparently re-encrypts. The external_version field tracks which key version was used, and CRDP automatically handles version negotiation.
@@ -401,7 +407,7 @@ Raw Output from LLM: "[Contains only tokenized values, no plaintext PII]"
 
 **Demo Duration**: ~45 minutes (narration + tech + Q&A)  
 **Recommended Audience**: Technical teams, security officers, compliance teams  
-**Difficulty**: Intermediate (assumes some Kubernetes familiarity)  
+**Difficulty**: Intermediate (assumes some familiarity with Kubernetes and your organization's security tooling)  
 
 ---
 
