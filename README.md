@@ -120,22 +120,24 @@ Visit [http://localhost:8501](http://localhost:8501) in your browser.
 
 ### Data Flow Phases
 
-**Phase 1: Ingestion Interception (Prompt Sanitization)**
-- User submits query containing PII patterns (SSNs, emails, etc.)
-- Regex engine detects patterns and calls CRDP `/protect`
-- Tokenized version sent to LLM
+**Phase 1: Prompt Ingestion**
+- User submits query (e.g., "Who is our compliance auditor?")
+- Query sent directly to Ollama (no tokenization needed)
 
-**Phase 2: Context Sanitization (RAG Loading)**
-- Enterprise knowledge base read from CTE volume
-- Raw PII found in knowledge base, protected via CRDP
-- Tokenized RAG context injected into LLM system prompt
+**Phase 2: Context Loading (Full Cleartext)**
+- Enterprise knowledge base read from CTE volume  
+- RAG context (with real SSNs, emails, etc.) injected into LLM system prompt
+- Ollama processes the CLEARTEXT knowledge base naturally
 
-**Phase 3: Retrieval Interception (Reveal Pass)**
-- LLM outputs response containing tokens
-- Regex engine detects token patterns
-- Calls CRDP `/reveal` with user identity
-- Access policy evaluated by CipherTrust Manager
-- Result: Cleartext (Alice), Masked (Bob), or Denied (Rogue)
+**Phase 3: LLM Inference**
+- Ollama generates response using cleartext knowledge base
+- Response contains real PII values (e.g., "000-88-9999")
+
+**Phase 4: Output Authorization & Tokenization**
+- Middleware intercepts Ollama's response
+- CRDP `/protect` called to tokenize any detected PII
+- CRDP `/reveal` called with user identity to determine authorization level
+- Result: Cleartext (Alice), Masked (Bob), or Denied (Rogue) - based on policy evaluation
 
 ## 🔐 Security Model
 
