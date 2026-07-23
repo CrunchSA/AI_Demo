@@ -269,12 +269,12 @@ Sanitized Knowledge:
 **Step 1**: Send to Ollama
 ```
 POST http://ollama-service:11434/api/chat
-[Prompt with CLEARTEXT knowledge base]
+[Prompt with SANITIZED knowledge base]
 ```
 
 **Step 2**: Ollama processes inference
 - Models: qwen2.5 small language model
-- Context: Sees real SSN "000-88-9999" (cleartext)
+- Context: Sees fake token "572-39-1148" (no cleartext)
 - Processing: Standard transformer inference
 - Output: Generates natural, accurate response
 
@@ -284,55 +284,26 @@ POST http://ollama-service:11434/api/chat
   "message": {
     "role": "assistant",
     "content": "The designated internal compliance auditor is Jane Doe. 
-               Her secure identifier number is 000-88-9999."  ← CLEARTEXT from Ollama
+               Her secure identifier number is 572-39-1148."  ← TOKENIZED from Ollama
   }
 }
 ```
 
-### Phase 4: Output Authorization & Tokenization (2000-2200ms)
+### Phase 4: Output Authorization & Reveal (2000-2200ms)
 
 **Step 1**: Middleware receives raw LLM output
 ```
 Raw Output: "The designated internal compliance auditor is Jane Doe. 
-             Her secure identifier number is 000-88-9999."  ← CLEARTEXT
+             Her secure identifier number is 572-39-1148."  ← TOKENIZED
 ```
 
-**Step 2**: Scan for PII patterns
+**Step 2**: Scan for FPT tokens matching SSN patterns
 ```
 Pattern: \b\d{3}-\d{2}-\d{4}\b
-Matches: ["000-88-9999"]
+Matches: ["572-39-1148"]
 ```
 
-**Step 3**: Call CRDP /protect to tokenize the output
-```
-POST http://crdp-service:8090/v1/protect
-{
-  "protection_policy_name": "llm-ssn-tokenize-policy",
-  "data": "000-88-9999",
-  "username": "Alice"
-}
-```
-
-**Step 4**: CRDP returns token & version
-```json
-{
-  "protected_data": "572-39-1148",
-  "external_version": "1"
-}
-```
-
-**Step 5**: Cache version metadata
-```python
-st.session_state.token_version_vault["572-39-1148"] = "1"
-```
-
-**Step 6**: Substitute token in output (browser can't see cleartext yet)
-```
-Tokenized Response: "The designated internal compliance auditor is Jane Doe. 
-                     Her secure identifier number is 572-39-1148."
-```
-
-**Step 7**: Call CRDP /reveal with Alice's identity to get cleartext for display
+**Step 3**: Call CRDP /reveal with Alice's identity to get cleartext for display
 ```
 POST http://crdp-service:8090/v1/reveal
 {

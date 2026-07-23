@@ -89,16 +89,16 @@ Permission Denied
 **Talking Point**:
 > "Notice: Even though I'm logged in as **root** with complete system privileges, the CTE encryption layer completely blocks access to this file. The file is encrypted at the filesystem level with a key that's tied to the specific **containerd signature** of our authorized Kubernetes deployment. Rogue admins, external attackers, or anyone without the proper deployment credentials is completely blind to this data."
 
-**Action 2**: Show that Ollama pod DOES have access
+**Action 2**: Show that the Streamlit middleware DOES have access
 ```bash
-# Ollama CAN read the mounted knowledge base
+# Streamlit middleware CAN read the mounted knowledge base
 kubectl exec -it deployment/streamlit-app -- \
   cat /data/enterprise_knowledge.txt
 # Output: [Readable plaintext with real SSNs]
 ```
 
 **Talking Point**:
-> "Ollama **can** read this data—and it does. The LLM engine gets the full, cleartext knowledge base. But here's the critical part: Ollama's responses are not directly shown to users. Every output is intercepted by CRDP and tokenized. The user never sees what Ollama actually generated. They see a token. Only if they're authorized do they see the cleartext."
+> "The Streamlit middleware **can** read this data—and it does. But here's the critical part: The LLM engine never sees this cleartext knowledge base. Before the middleware sends the context to Ollama, every sensitive value is intercepted by CRDP and tokenized. The LLM never sees what is actually in the file, only the tokens."
 
 ---
 
@@ -170,7 +170,7 @@ Response Payload:
 ```
 
 **Talking Point #1**:
-> "**Transaction #1 - The Protect Call**: Ollama processed the knowledge base (which contains the real SSN: **000-88-9999**) and generated its response with that cleartext value. But before showing it to the user, the middleware intercepted that response and sent it to Thales CRDP. CRDP tokenized the real SSN **000-88-9999** into **572-39-1148**."
+> "**Transaction #1 - The Protect Call**: Before Ollama ever saw the prompt, the middleware intercepted the knowledge base (which contains the real SSN: **000-88-9999**) and sent it to Thales CRDP. CRDP tokenized the real SSN **000-88-9999** into **572-39-1148** before sending it to the LLM."
 
 > "Notice—this isn't a random string. It's format-preserving tokenization, meaning it looks like a structurally valid SSN. This allows embedding models and the LLM to work with the real data naturally. But the user interface only sees the token."
 
@@ -210,8 +210,8 @@ Scroll up → "Thales Real-Time Audit Console" section
 > "The Audit Console shows exactly what was transmitted at each stage:"
 > 
 > "1. **Raw User Input** — The question as typed  
-> 2. **Sent to LLM Engine Context** — The full, cleartext knowledge base (Ollama sees real data)  
-> 3. **Raw Output from LLM Core** — What Ollama returned (cleartext SSN: 000-88-9999)  
+> 2. **Sent to LLM Engine Context** — The sanitized knowledge base (Ollama sees tokenized data)  
+> 3. **Raw Output from LLM Core** — What Ollama returned (tokenized SSN: 572-39-1148)  
 > 4. **Final Detokenized Presentation Layer** — What Alice sees (revealed by CRDP policy: 000-88-9999)"  
 > 
 > "Notice: The middleware tokenizes Ollama's response, but then immediately reveals it to Alice because she's authorized. If Bob had asked, step 4 would show XXX-XX-9999 instead."
@@ -331,7 +331,7 @@ Shows only tokens, not cleartext
 ```
 
 **Talking Point**:
-> "The attack **fails at the authorization layer**. Ollama did process the request and generated a response with the real SSN. But when the middleware called CRDP's `/reveal` endpoint with **'Malicious_Actor'** as the username, the CipherTrust Manager said 'No Access' and returned a denial block."
+> "The attack **fails at the authorization layer**. Ollama processed the request and generated a response with the tokenized SSN, because that's all it knows. When the middleware attempted to `/reveal` that token using the **'Malicious_Actor'** username, the CipherTrust Manager said 'No Access' and returned a denial block."
 
 > "The real data is protected not by hiding it from the LLM, but by enforcing authorization on every output. Even if an attacker tricks Ollama into generating sensitive data, Thales CRDP prevents it from reaching them. The policy is enforced at the perimeter, not inside the untrusted LLM."
 
