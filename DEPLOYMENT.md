@@ -2,6 +2,15 @@
 
 This guide covers deploying the Thales CipherTrust AI Perimeter to a production Kubernetes cluster with CTE (Transparent Encryption) and Thales CRDP services. The examples use sample namespaces, hostnames, registry paths, storage locations, and DNS names; replace every placeholder with values from your own environment before applying manifests.
 
+## Deployment Paths
+
+Use one of these paths before starting:
+
+- **Path A (Clean Setup)**: You will create all required app-facing resources in your target namespace (PV/PVC, services, ConfigMap/Secret, deployments).
+- **Path B (Existing Shared Security Services)**: Your cluster already has CRDP and/or CTE configured in other namespaces or external endpoints. You will reuse them and only deploy app resources in your target namespace.
+
+This guide keeps the full clean setup flow and adds shared-services alternatives where needed.
+
 ## Prerequisites
 
 ### Infrastructure Requirements
@@ -37,6 +46,30 @@ kubectl >= 1.27
 helm >= 3.12 (optional, for package management)
 docker >= 20.10 (for building images)
 ```
+
+### Pre-Flight Discovery (Path B)
+
+If your platform team already deployed CRDP/CTE, run these checks first and write down the results:
+
+```bash
+# 1) Find CRDP service candidates
+kubectl get svc -A | grep -Ei 'crdp|ciphertrust|thales'
+
+# 2) Find CTE storage classes / CSI drivers
+kubectl get sc
+kubectl get csidrivers
+
+# 3) Inspect existing secure claims and policies
+kubectl get pvc -A
+kubectl describe pvc <existing-secure-pvc-name> -n <namespace>
+
+# 4) Validate CRDP reachability from your target namespace
+kubectl run netcheck --rm -it --restart=Never --image=curlimages/curl \
+  -n <your-namespace> -- \
+  curl -sS http://<your-crdp-host-or-service>/v1/protect
+```
+
+If these checks pass, you can skip clean setup components that already exist and proceed with reuse patterns in Steps 2, 4, and 5.
 
 ## Step 1: Build and Push Container Image
 
@@ -79,7 +112,7 @@ HEALTHCHECK CMD curl -f http://localhost:8501/_stcore/health || exit 1
 CMD ["streamlit", "run", "app.py", "--server.port=8501", "--server.address=0.0.0.0"]
 ```
 
-## Step 2: Prepare CTE-Protected Storage
+## Step 2 (Path A): Prepare CTE-Protected Storage
 
 ### Create PersistentVolume (PV)
 
@@ -158,6 +191,22 @@ kubectl apply -f persistent-volume-claim-knowledge.yaml
 # Verify
 kubectl get pv
 kubectl get pvc
+```
+
+### Path B Alternative: Reuse Existing CTE Storage
+
+If your cluster already has CTE-backed storage:
+
+1. Reuse an existing secure PVC for the knowledge base and optionally a separate one for Ollama models.
+2. Do **not** create a new hostPath PV unless your platform requires it.
+3. Confirm mount path and file naming expected by the app (`KNOWLEDGE_PATH`, default `/data/enterprise_knowledge.txt`).
+
+Example checks:
+
+```bash
+kubectl get pvc -A
+kubectl get pvc <secure-knowledge-pvc> -n <namespace> -o yaml
+kubectl get pvc <secure-models-pvc> -n <namespace> -o yaml
 ```
 
 ## Step 3: Deploy Ollama Service
@@ -349,6 +398,34 @@ spec:
   type: ClusterIP
 ```
 
+### Option C: Reuse Existing In-Cluster CRDP in Another Namespace
+
+If CRDP already runs in another namespace, either:
+
+- Reference it directly in `CRDP_URL` using FQDN: `http://<service>.<namespace>.svc.cluster.local:8090/v1`
+- Or create a local alias service in your app namespace:
+
+```yaml
+# crdp-service-alias.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: crdp-service
+  namespace: your-namespace
+spec:
+  type: ExternalName
+  externalName: existing-crdp-service.existing-crdp-namespace.svc.cluster.local
+  ports:
+  - port: 8090
+    targetPort: 8090
+```
+
+Apply alias (optional):
+
+```bash
+kubectl apply -f crdp-service-alias.yaml
+```
+
 ### Verify CRDP Connectivity
 
 ```bash
@@ -407,6 +484,27 @@ stringData:
 kubectl apply -f configmap.yaml
 kubectl apply -f secret.yaml
 ```
+
+### Path B Alternative: Minimal Config for Shared Services
+
+When reusing existing CRDP/CTE, keep ConfigMap values explicit and environment-specific:
+
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ciphertrust-config
+  namespace: your-namespace
+data:
+  # Cross-namespace FQDN or enterprise DNS alias
+  CRDP_URL: "http://existing-crdp-service.existing-crdp-namespace.svc.cluster.local:8090/v1"
+  CRDP_POLICY: "your-existing-policy"
+  OLLAMA_URL: "http://ollama-service.your-namespace.svc.cluster.local:11434/api/chat"
+  MODEL_NAME: "qwen2.5:1.5b"
+  KNOWLEDGE_PATH: "/data/enterprise_knowledge.txt"
+```
+
+This keeps deployment manifests stable while allowing enterprise endpoint reuse.
 
 ## Step 6: Deploy Streamlit Application
 
@@ -584,6 +682,21 @@ spec:
       port: 53
 ```
 
+If CRDP runs in another namespace, tighten egress to that namespace and CRDP pods when labels are known:
+
+```yaml
+- to:
+  - namespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: existing-crdp-namespace
+    podSelector:
+      matchLabels:
+        run: crdp
+  ports:
+  - protocol: TCP
+    port: 8090
+```
+
 ### Apply Network Policies
 
 ```bash
@@ -692,6 +805,22 @@ kubectl exec -it deployment/streamlit-app -- \
 # Test Ollama connectivity
 kubectl exec -it deployment/streamlit-app -- \
   curl http://<your-ollama-service-name>.<your-namespace>.svc.cluster.local:11434/api/tags
+```
+
+### Path B Verification Add-On
+
+For shared-service deployments, verify the active runtime wiring in your app pod:
+
+```bash
+kubectl describe deployment/streamlit-app -n <your-namespace>
+
+# Confirm env values used at runtime
+kubectl exec -it deployment/streamlit-app -n <your-namespace> -- \
+  printenv | grep -E 'CRDP_URL|OLLAMA_URL|CRDP_POLICY|KNOWLEDGE_PATH'
+
+# Verify CRDP endpoint resolves and responds
+kubectl exec -it deployment/streamlit-app -n <your-namespace> -- \
+  curl -sS http://<your-crdp-host-or-service>/v1/protect
 ```
 
 ### End-to-End Test

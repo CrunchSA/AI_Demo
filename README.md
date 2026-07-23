@@ -179,12 +179,18 @@ docker-compose up --build
 
    Note: [DEPLOYMENT.md](DEPLOYMENT.md) contains example manifest snippets and operational steps; it is not the same as the local Compose setup and does not replace `docker-compose.yml` for local development.
 
+   The deployment guide supports two Kubernetes modes:
+
+   - **Path A (Clean Setup)**: Create CRDP/CTE-facing resources in your target namespace from scratch.
+   - **Path B (Existing Shared Services)**: Reuse CRDP and CTE that are already deployed by your platform team (for example in another namespace or via enterprise DNS), then deploy only the app components and environment wiring.
+
    All Kubernetes examples use illustrative values such as `default` namespaces, cluster-local DNS names, sample host paths, and example policy names. Treat them as templates and replace them with the names, paths, URLs, credentials, and access-control labels used in your own environment.
 
 See [DEPLOYMENT.md](DEPLOYMENT.md) for:
 - CTE volume provisioning
+- Existing CTE volume reuse patterns
 - Persistent Volume Claims (PVCs)
-- Service mesh configuration
+- CRDP service alias and cross-namespace endpoint wiring
 - Network policies for CRDP endpoints
 - Secrets management for API credentials
 
