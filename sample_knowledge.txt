@@ -1,0 +1,157 @@
+ENTERPRISE KNOWLEDGE BASE TEMPLATE
+===================================
+
+This file serves as a template for your enterprise knowledge base.
+Replace with your actual corporate data, policies, and procedures.
+
+---
+
+ORGANIZATIONAL STRUCTURE
+========================
+
+Executive Leadership:
+- CEO: John Richardson, Employee ID: 501-32-1234
+- CFO: Sarah Mitchell, Employee ID: 502-45-5678
+- CIO: Michael Chen, Employee ID: 503-67-9012
+
+Operations:
+- Operations Manager: David Brown, Employee ID: 504-78-3456
+- Facilities Manager: Jennifer White, Employee ID: 505-89-7890
+
+Compliance & Audit:
+- Compliance Officer: Jane Doe, Employee ID: 000-88-9999 (Full Access Auditor)
+- Internal Auditor: Robert Johnson, Employee ID: 506-12-3456
+- Security Officer: Amanda Davis, Employee ID: 507-23-4567
+
+Customer Support:
+- Support Manager: Thomas Wilson, Employee ID: 508-34-5678
+- Support Agent (Tier 1): Bob Smith, Employee ID: 001-23-4567
+- Support Agent (Tier 1): Lisa Anderson, Employee ID: 509-45-6789
+- Support Agent (Tier 2): Christopher Lee, Employee ID: 510-56-7890
+
+---
+
+COMPANY POLICIES
+================
+
+Data Protection Policy (DPP-2026-001):
+- All customer data must be encrypted at rest
+- Access logs must be maintained for 12 months
+- Quarterly security audits required
+- Minimum password length: 12 characters
+- Multi-factor authentication mandatory for administrators
+
+Access Control Policy (ACP-2026-002):
+- Role-based access control (RBAC) required
+- Principle of least privilege applies
+- Annual access reviews required
+- Terminated employees access revoked within 24 hours
+
+---
+
+SECURE SYSTEM IDENTIFIERS
+==========================
+
+Production Database Master Key Hash:
+  sha256:a3f8b2c1d9e7f4a6b5c8d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1
+
+API Rate Limits:
+- Standard: 1000 requests/hour
+- Premium: 5000 requests/hour
+- Enterprise: Unlimited
+
+Service Account Credentials (Store in HashiCorp Vault):
+- svc-account-001: [REDACTED - Use Vault Secret ID]
+- svc-account-002: [REDACTED - Use Vault Secret ID]
+
+---
+
+INTERNAL CONTACT DIRECTORY
+===========================
+
+IT Support: support@company.internal (ext. 5555)
+Security Team: security@company.internal (ext. 6666)
+Compliance: compliance@company.internal (ext. 7777)
+Executive Support: exec-support@company.internal (ext. 8888)
+
+---
+
+SYSTEM ARCHITECTURE NOTES
+=========================
+
+Infrastructure:
+- Primary Data Center: US-East-1 (AWS Region)
+- DR Data Center: US-West-2 (AWS Region)
+- RKE2 Kubernetes Cluster: 12 nodes (4 control, 8 compute)
+- Storage Backend: NetApp ONTAP (30TB capacity)
+
+Database Configuration:
+- Primary: PostgreSQL 15 (Master-Slave replication)
+- Cache: Redis Cluster 7.0
+- Search: Elasticsearch 8.5
+
+Network Topology:
+- VPC CIDR: 10.0.0.0/16
+- Internal Subnet: 10.0.1.0/24
+- DMZ Subnet: 10.0.2.0/24
+
+---
+
+INSTRUCTIONS FOR USE
+====================
+
+1. REPLACE SENSITIVE DATA:
+   - Replace all sample SSNs with your actual employee/customer IDs
+   - Replace all email addresses with your domains
+   - Update all system identifiers with real credentials
+
+2. TOKENIZATION:
+   If using Format-Preserving Tokenization (FPT):
+   - SSNs will be tokenized to structurally similar fake IDs
+   - Emails will be masked to ***@company.com
+   - Phone numbers will be masked to XXX-XXX-XXXX
+
+3. ACCESS CONTROL:
+   Configure these user sets in Thales CipherTrust Manager:
+   
+   a) Full_Access_Auditors (e.g., "Alice"):
+      - Jane Doe (000-88-9999) - Full cleartext reveal
+      - Robert Johnson (506-12-3456) - Full cleartext reveal
+      
+   b) Masked_Access_Agents (e.g., "Bob"):
+      - Bob Smith (001-23-4567) - Masked/redacted reveal
+      - Lisa Anderson (509-45-6789) - Masked/redacted reveal
+      
+   c) No_Access_Rogue (e.g., "Malicious_Actor"):
+      - All requests denied with [Access Denied: 403]
+
+4. DEPLOYMENT:
+   - Save this file to: /opt/raw-llm-data/enterprise_knowledge.txt
+   - CTE encryption will automatically protect at filesystem level
+   - Kubernetes PVC will mount as read-only volume to Streamlit pod
+   - CRDP will intercept and tokenize on ingestion/reveal
+
+---
+
+RETENTION & ROTATION
+====================
+
+- Review this knowledge base quarterly
+- Update employee information annually
+- Rotate service account credentials monthly
+- Archive previous versions for audit trail
+- Maintain immutable backup copies in cold storage
+
+---
+
+AUDIT TRAIL
+===========
+
+Created: 2026-07-23 by [Your Name]
+Last Modified: 2026-07-23
+Version: 1.0
+Status: Template (Replace with actual data before production use)
+
+---
+
+END OF KNOWLEDGE BASE TEMPLATE

@@ -1,0 +1,76 @@
+version: '3.8'
+
+services:
+  # Streamlit UI Application
+  streamlit-app:
+    build:
+      context: .
+      dockerfile: dockerfile
+    container_name: ciphertrust-ai-perimeter
+    ports:
+      - "8501:8501"
+    environment:
+      - CRDP_URL=${CRDP_URL:-http://crdp-service:8090/v1}
+      - OLLAMA_URL=${OLLAMA_URL:-http://ollama-service:11434/api/chat}
+      - CRDP_POLICY=${CRDP_POLICY:-llm-ssn-tokenize-policy}
+      - MODEL_NAME=${MODEL_NAME:-qwen2.5:1.5b}
+      - KNOWLEDGE_PATH=${KNOWLEDGE_PATH:-/data/enterprise_knowledge.txt}
+    volumes:
+      # Mount local knowledge base file (or create empty directory)
+      - ./data:/data:ro
+      # Optional: Mount CTE-protected volume (requires CTE configured at host level)
+      # - cte-protected-volume:/data:ro
+    depends_on:
+      - ollama-service
+      - crdp-service
+    networks:
+      - ciphertrust-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8501/_stcore/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Ollama Local LLM Service
+  ollama-service:
+    image: ollama/ollama:latest
+    container_name: ollama-llm-service
+    ports:
+      - "11434:11434"
+    environment:
+      - OLLAMA_HOST=0.0.0.0:11434
+    volumes:
+      # Persistent model storage
+      - ollama-models:/root/.ollama
+    networks:
+      - ciphertrust-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Thales CipherTrust CRDP Service (placeholder)
+  # Note: Replace with actual Thales CRDP container or external service URL
+  crdp-service:
+    image: ciphertrust-crdp:latest
+    container_name: crdp-protection-service
+    ports:
+      - "8090:8090"
+    environment:
+      - CRDP_POLICY=${CRDP_POLICY:-llm-ssn-tokenize-policy}
+    networks:
+      - ciphertrust-net
+    # Uncomment if running external CRDP instance
+    # Comment out if using actual Thales container
+    profiles:
+      - disabled
+
+volumes:
+  ollama-models:
+    driver: local
+
+networks:
+  ciphertrust-net:
+    driver: bridge

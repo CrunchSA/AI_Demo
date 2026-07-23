@@ -1,0 +1,793 @@
+# 🚀 Deployment Guide: RKE2 & Kubernetes
+
+This guide covers deploying the Thales CipherTrust AI Perimeter to a production RKE2 Kubernetes cluster with CTE (Transparent Encryption) and Thales CRDP services.
+
+## Prerequisites
+
+### Infrastructure Requirements
+
+- **RKE2 Cluster**: v1.27+ (Kubernetes 1.27+)
+- **Node Roles**: 
+  - 1x Control Plane Node (at least)
+  - 1x Compute Node (for Streamlit + Ollama)
+  - 1x CRDP Service Node (shared or external service)
+
+- **Storage**: 
+  - Persistent Volume (PV) for Ollama models (~7-10GB)
+  - CTE-encrypted volume for enterprise knowledge base
+  - ReadOnlyMany (ROX) or ReadWriteOnce (RWO) support
+
+- **Network**:
+  - Internal cluster DNS (`*.default.svc.cluster.local`)
+  - Egress from app pods to Thales CRDP endpoint
+  - Optional: Ingress controller for external access
+
+### Tools Required
+
+```bash
+kubectl >= 1.27
+helm >= 3.12 (optional, for package management)
+docker >= 20.10 (for building images)
+```
+
+## Step 1: Build and Push Container Image
+
+### Build Locally
+
+```bash
+# Clone the repository
+git clone https://github.com/yourusername/ciphertrust-ai-perimeter.git
+cd ciphertrust-ai-perimeter
+
+# Build the Streamlit application image
+docker build -t ciphertrust-ai-perimeter:1.0 .
+
+# Tag for your registry
+docker tag ciphertrust-ai-perimeter:1.0 \
+  your-registry.azurecr.io/ciphertrust-ai-perimeter:1.0
+
+# Push to registry
+docker push your-registry.azurecr.io/ciphertrust-ai-perimeter:1.0
+```
+
+### Dockerfile (Reference)
+
+The included `dockerfile` should look similar to:
+
+```dockerfile
+FROM python:3.11-slim
+
+WORKDIR /app
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY app.py .
+
+EXPOSE 8501
+
+HEALTHCHECK CMD curl -f http://localhost:8501/_stcore/health || exit 1
+
+CMD ["streamlit", "run", "app.py", "--server.port=8501", "--server.address=0.0.0.0"]
+```
+
+## Step 2: Prepare CTE-Protected Storage
+
+### Create PersistentVolume (PV)
+
+```yaml
+# persistent-volume-cte.yaml
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: enterprise-knowledge-pv
+  namespace: default
+spec:
+  capacity:
+    storage: 10Gi
+  accessModes:
+    - ReadOnlyMany
+  # CTE Encryption: Applied at host level
+  # Mount Path: /opt/raw-llm-data/ (encrypted on node)
+  hostPath:
+    path: /opt/raw-llm-data
+    type: Directory
+  persistentVolumeReclaimPolicy: Retain
+```
+
+### Create PersistentVolumeClaim (PVC)
+
+```yaml
+# persistent-volume-claim-knowledge.yaml
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: enterprise-knowledge-pvc
+  namespace: default
+spec:
+  accessModes:
+    - ReadOnlyMany
+  resources:
+    requests:
+      storage: 10Gi
+  volumeName: enterprise-knowledge-pv
+```
+
+### Populate Knowledge Base
+
+```bash
+# SSH into the RKE2 node
+ssh root@rke2-node1
+
+# Create encrypted directory (requires CTE agent installed)
+mkdir -p /opt/raw-llm-data
+
+# Create the knowledge base file
+cat > /opt/raw-llm-data/enterprise_knowledge.txt <<EOF
+Jane Doe is our designated internal system compliance auditor.
+Her secure identifier number is 000-88-9999.
+She has full access to all internal documentation and secure systems.
+
+Bob Smith is a support agent with limited access.
+His employee ID is 001-23-4567.
+He can access customer support records only.
+EOF
+
+# Set permissions (optional)
+chmod 644 /opt/raw-llm-data/enterprise_knowledge.txt
+
+# Verify CTE encryption is active
+ls -la /opt/raw-llm-data/
+# Files should be encrypted at filesystem level
+```
+
+### Apply PV and PVC
+
+```bash
+kubectl apply -f persistent-volume-cte.yaml
+kubectl apply -f persistent-volume-claim-knowledge.yaml
+
+# Verify
+kubectl get pv
+kubectl get pvc
+```
+
+## Step 3: Deploy Ollama Service
+
+### Ollama Deployment
+
+```yaml
+# ollama-deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ollama-service
+  namespace: default
+  labels:
+    app: ollama
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ollama
+  template:
+    metadata:
+      labels:
+        app: ollama
+    spec:
+      containers:
+      - name: ollama
+        image: ollama/ollama:latest
+        ports:
+        - containerPort: 11434
+          name: http
+        env:
+        - name: OLLAMA_HOST
+          value: "0.0.0.0:11434"
+        resources:
+          requests:
+            memory: "4Gi"
+            cpu: "2"
+          limits:
+            memory: "8Gi"
+            cpu: "4"
+        volumeMounts:
+        - name: ollama-models
+          mountPath: /root/.ollama
+        livenessProbe:
+          httpGet:
+            path: /api/tags
+            port: 11434
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /api/tags
+            port: 11434
+          initialDelaySeconds: 10
+          periodSeconds: 5
+      volumes:
+      - name: ollama-models
+        persistentVolumeClaim:
+          claimName: ollama-models-pvc
+---
+# Ollama Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: ollama-service
+  namespace: default
+spec:
+  selector:
+    app: ollama
+  ports:
+  - port: 11434
+    targetPort: 11434
+    name: http
+  type: ClusterIP
+---
+# Ollama Models PVC
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ollama-models-pvc
+  namespace: default
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 20Gi
+```
+
+### Deploy Ollama
+
+```bash
+kubectl apply -f ollama-deployment.yaml
+
+# Wait for Ollama to start
+kubectl rollout status deployment/ollama-service
+
+# Pull the model (run as init container or post-deployment job)
+kubectl exec -it deployment/ollama-service -- ollama pull qwen2.5:1.5b
+
+# Verify service is ready
+kubectl get svc ollama-service
+kubectl get pods -l app=ollama
+```
+
+## Step 4: Configure CRDP Service Access
+
+### Option A: External CRDP Service
+
+If you're using an external Thales CipherTrust Manager:
+
+```yaml
+# crdp-service-external.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: crdp-service
+  namespace: default
+spec:
+  type: ExternalName
+  externalName: ciphertrust-manager.your-domain.com
+  ports:
+  - port: 8090
+    targetPort: 8090
+    protocol: TCP
+---
+# Optional: Create Endpoints for IP-based external service
+apiVersion: v1
+kind: Endpoints
+metadata:
+  name: crdp-service
+  namespace: default
+subsets:
+- addresses:
+  - ip: 10.0.0.100  # Replace with your CRDP server IP
+    ports:
+    - port: 8090
+```
+
+### Option B: Internal CRDP Pod (Advanced)
+
+If deploying CRDP inside the cluster:
+
+```yaml
+# crdp-deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: crdp-service
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: crdp
+  template:
+    metadata:
+      labels:
+        app: crdp
+    spec:
+      containers:
+      - name: crdp
+        image: ciphertrust-crdp:latest  # Your Thales CRDP image
+        ports:
+        - containerPort: 8090
+        env:
+        - name: CRDP_POLICY
+          value: "llm-ssn-tokenize-policy"
+        resources:
+          requests:
+            memory: "2Gi"
+            cpu: "1"
+          limits:
+            memory: "4Gi"
+            cpu: "2"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: crdp-service
+  namespace: default
+spec:
+  selector:
+    app: crdp
+  ports:
+  - port: 8090
+    targetPort: 8090
+  type: ClusterIP
+```
+
+### Verify CRDP Connectivity
+
+```bash
+# From Streamlit pod (after deployment)
+kubectl exec -it deployment/streamlit-app -- \
+  curl -X POST http://crdp-service:8090/v1/protect \
+    -H "Content-Type: application/json" \
+    -d '{
+      "protection_policy_name": "llm-ssn-tokenize-policy",
+      "data": "000-88-9999",
+      "username": "Alice"
+    }'
+
+# Expected response:
+# {"protected_data": "572-39-1148", "external_version": "1"}
+```
+
+## Step 5: Create ConfigMap & Secrets
+
+### ConfigMap for Environment Variables
+
+```yaml
+# configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ciphertrust-config
+  namespace: default
+data:
+  CRDP_URL: "http://crdp-service.default.svc.cluster.local:8090/v1"
+  CRDP_POLICY: "llm-ssn-tokenize-policy"
+  OLLAMA_URL: "http://ollama-service.default.svc.cluster.local:11434/api/chat"
+  MODEL_NAME: "qwen2.5:1.5b"
+  KNOWLEDGE_PATH: "/data/enterprise_knowledge.txt"
+  STREAMLIT_SERVER_PORT: "8501"
+```
+
+### Secret for CRDP API Credentials (Optional)
+
+```yaml
+# secret.yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ciphertrust-credentials
+  namespace: default
+type: Opaque
+stringData:
+  CRDP_API_KEY: "your-api-key-here"  # If using API key auth
+  CRDP_API_SECRET: "your-api-secret-here"
+```
+
+### Apply ConfigMap and Secrets
+
+```bash
+kubectl apply -f configmap.yaml
+kubectl apply -f secret.yaml
+```
+
+## Step 6: Deploy Streamlit Application
+
+### Streamlit Deployment
+
+```yaml
+# streamlit-deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: streamlit-app
+  namespace: default
+  labels:
+    app: streamlit-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: streamlit-app
+  template:
+    metadata:
+      labels:
+        app: streamlit-app
+    spec:
+      containers:
+      - name: streamlit
+        image: your-registry.azurecr.io/ciphertrust-ai-perimeter:1.0
+        ports:
+        - containerPort: 8501
+          name: http
+        envFrom:
+        - configMapRef:
+            name: ciphertrust-config
+        - secretRef:
+            name: ciphertrust-credentials
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "1"
+        volumeMounts:
+        - name: knowledge-base
+          mountPath: /data
+          readOnly: true
+        livenessProbe:
+          httpGet:
+            path: /_stcore/health
+            port: 8501
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /_stcore/health
+            port: 8501
+          initialDelaySeconds: 10
+          periodSeconds: 5
+      volumes:
+      - name: knowledge-base
+        persistentVolumeClaim:
+          claimName: enterprise-knowledge-pvc
+---
+# Streamlit Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: streamlit-service
+  namespace: default
+spec:
+  selector:
+    app: streamlit-app
+  ports:
+  - port: 8501
+    targetPort: 8501
+    name: http
+  type: LoadBalancer  # Or NodePort/ClusterIP
+```
+
+### Deploy Streamlit
+
+```bash
+kubectl apply -f streamlit-deployment.yaml
+
+# Wait for pod to start
+kubectl rollout status deployment/streamlit-app
+
+# Check logs
+kubectl logs deployment/streamlit-app
+
+# Port forward for testing
+kubectl port-forward svc/streamlit-service 8501:8501
+```
+
+## Step 7: Network Policies
+
+### Restrict Ollama Access
+
+Ollama should NOT reach CRDP (enforce separation):
+
+```yaml
+# network-policy-ollama.yaml
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ollama-network-policy
+  namespace: default
+spec:
+  podSelector:
+    matchLabels:
+      app: ollama
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app: streamlit-app
+    ports:
+    - protocol: TCP
+      port: 11434
+  egress:
+  # Allow DNS
+  - to:
+    - namespaceSelector: {}
+    ports:
+    - protocol: UDP
+      port: 53
+  # Deny all other egress (including to CRDP)
+```
+
+### Streamlit to CRDP Access
+
+```yaml
+# network-policy-streamlit.yaml
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: streamlit-network-policy
+  namespace: default
+spec:
+  podSelector:
+    matchLabels:
+      app: streamlit-app
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - namespaceSelector: {}
+    ports:
+    - protocol: TCP
+      port: 8501
+  egress:
+  # Allow to Ollama
+  - to:
+    - podSelector:
+        matchLabels:
+          app: ollama
+    ports:
+    - protocol: TCP
+      port: 11434
+  # Allow to CRDP (via service external name or IP)
+  - to:
+    - namespaceSelector: {}
+    ports:
+    - protocol: TCP
+      port: 8090
+  # Allow DNS
+  - to:
+    - namespaceSelector: {}
+    ports:
+    - protocol: UDP
+      port: 53
+```
+
+### Apply Network Policies
+
+```bash
+kubectl apply -f network-policy-ollama.yaml
+kubectl apply -f network-policy-streamlit.yaml
+```
+
+## Step 8: Set Up Ingress (Optional)
+
+### Nginx Ingress
+
+```yaml
+# ingress.yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ciphertrust-ingress
+  namespace: default
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+spec:
+  ingressClassName: nginx
+  tls:
+  - hosts:
+    - ciphertrust-demo.your-domain.com
+    secretName: ciphertrust-tls
+  rules:
+  - host: ciphertrust-demo.your-domain.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: streamlit-service
+            port:
+              number: 8501
+```
+
+### Deploy Ingress
+
+```bash
+kubectl apply -f ingress.yaml
+
+# Check status
+kubectl get ingress
+kubectl describe ingress ciphertrust-ingress
+```
+
+## Step 9: Monitoring & Logging
+
+### Prometheus Metrics (Optional)
+
+```yaml
+# service-monitor.yaml
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: ciphertrust-monitor
+  namespace: default
+spec:
+  selector:
+    matchLabels:
+      app: streamlit-app
+  endpoints:
+  - port: http
+    interval: 30s
+```
+
+### Check Logs
+
+```bash
+# Streamlit logs
+kubectl logs deployment/streamlit-app -f
+
+# Ollama logs
+kubectl logs deployment/ollama-service -f
+
+# CRDP logs (if running in cluster)
+kubectl logs deployment/crdp-service -f
+
+# All pod events
+kubectl get events --sort-by='.lastTimestamp'
+```
+
+## Step 10: Verify Deployment
+
+### Health Checks
+
+```bash
+# Check all pods are running
+kubectl get pods
+
+# Check services
+kubectl get svc
+
+# Test Streamlit connectivity
+kubectl port-forward svc/streamlit-service 8501:8501
+# Visit http://localhost:8501 in browser
+
+# Test CRDP connectivity
+kubectl exec -it deployment/streamlit-app -- \
+  curl http://crdp-service.default.svc.cluster.local:8090/v1/protect
+
+# Test Ollama connectivity
+kubectl exec -it deployment/streamlit-app -- \
+  curl http://ollama-service.default.svc.cluster.local:11434/api/tags
+```
+
+### End-to-End Test
+
+```bash
+# Port forward and test via browser
+kubectl port-forward svc/streamlit-service 8501:8501
+
+# Open: http://localhost:8501
+# 1. Select "Alice" in sidebar
+# 2. Ask: "Who is our internal compliance auditor and what is their SSN?"
+# 3. Verify response shows unmasked SSN (000-88-9999)
+# 4. Switch to "Bob"
+# 5. Verify response shows masked SSN (XXX-XX-9999) or [Access Denied]
+```
+
+## Scaling & Operations
+
+### Horizontal Pod Autoscaling
+
+```yaml
+# hpa.yaml
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: streamlit-hpa
+  namespace: default
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: streamlit-app
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+```
+
+### Rolling Updates
+
+```bash
+# Update image version
+kubectl set image deployment/streamlit-app \
+  streamlit=your-registry.azurecr.io/ciphertrust-ai-perimeter:1.1
+
+# Monitor rollout
+kubectl rollout status deployment/streamlit-app
+
+# Rollback if needed
+kubectl rollout undo deployment/streamlit-app
+```
+
+## Troubleshooting
+
+### Pods Not Starting
+
+```bash
+# Check pod events
+kubectl describe pod <pod-name>
+
+# Check logs
+kubectl logs <pod-name>
+
+# Check resource constraints
+kubectl top pods
+```
+
+### CRDP Connection Errors
+
+```bash
+# Verify service DNS
+kubectl exec -it deployment/streamlit-app -- nslookup crdp-service
+
+# Test connectivity
+kubectl exec -it deployment/streamlit-app -- \
+  curl -v http://crdp-service:8090/v1/protect
+```
+
+### PVC Not Mounting
+
+```bash
+# Check PV and PVC status
+kubectl get pv
+kubectl get pvc
+
+# Check pod volume mounts
+kubectl describe pod <pod-name>
+
+# Check host path exists (on node)
+ssh root@<node-ip> ls -la /opt/raw-llm-data/
+```
+
+---
+
+**Last Updated**: 2026-07-23
+**Version**: 1.0
