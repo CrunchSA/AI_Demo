@@ -32,7 +32,7 @@ All user names, host names, service names, policy names, file paths, and respons
 ssh <your-admin-user>@<your-node-host>
 
 # Verify knowledge base exists and is encrypted
-sudo cat /path/to/your/encrypted-knowledge/enterprise_knowledge.txt
+sudo cat /opt/raw-llm-data/enterprise_knowledge.txt
 # Should show: [Permission Denied] or encrypted binary data
 
 # Only Streamlit pod can decrypt
@@ -75,10 +75,10 @@ whoami
 # Output: root
 
 # List encrypted directory
-ls -la /path/to/your/encrypted-knowledge/
+ls -la /opt/raw-llm-data
 
 # Attempt to read
-sudo cat /path/to/your/encrypted-knowledge/enterprise_knowledge.txt
+sudo cat /opt/raw-llm-data/enterprise_knowledge.txt
 ```
 
 **Expected Output**:
