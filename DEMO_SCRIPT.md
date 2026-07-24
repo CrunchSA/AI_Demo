@@ -106,7 +106,7 @@ kubectl exec -it deployment/streamlit-app -- \
 
 ---
 
-## ACT 2: Zero-Trust Context Ingestion (10 minutes)
+## ACT 2: Zero-Trust Context Ingestion (5 minutes)
 
 **Theme**: "Ollama has the data, but CRDP controls who sees it"
 
@@ -226,7 +226,7 @@ Scroll up → "Thales Real-Time Audit Console" section
 
 ---
 
-## ACT 3: Identity-Based Policy Enforcement (8 minutes)
+## ACT 3: Identity-Based Policy Enforcement (5 minutes)
 
 **Theme**: "Same LLM, different results per user"
 
@@ -405,7 +405,7 @@ Raw Output from LLM: "[Contains only tokenized values, no plaintext PII]"
 
 ---
 
-**Demo Duration**: ~45 minutes (narration + tech + Q&A)  
+**Demo Duration**: ~20 minutes (narration + tech + Q&A)  
 **Recommended Audience**: Technical teams, security officers, compliance teams  
 **Difficulty**: Intermediate (assumes some familiarity with Kubernetes and your organization's security tooling)  
 
