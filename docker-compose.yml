@@ -6,7 +6,7 @@ services:
     build:
       context: .
       dockerfile: dockerfile
-    container_name: ciphertrust-ai-perimeter
+    container_name: ai-demo
     ports:
       - "8501:8501"
     environment:

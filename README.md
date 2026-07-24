@@ -33,8 +33,8 @@ Replace all example hostnames, policy names, namespaces, storage paths, and user
 ### 1. Clone & Setup
 
 ```bash
-git clone https://github.com/yourusername/ciphertrust-ai-perimeter.git
-cd ciphertrust-ai-perimeter
+git clone https://github.com/CrunchSA/AI_Demo.git
+cd AI_Demo
 
 # Copy environment template
 cp .env.example .env
@@ -236,7 +236,7 @@ The user names and role descriptions shown in this demo are examples only. Map t
 ## 📝 File Structure
 
 ```
-ciphertrust-ai-perimeter/
+AI_Demo/
 ├── app.py                      # Main Streamlit application
 ├── dockerfile                  # Container image definition
 ├── docker-compose.yml          # Local orchestration

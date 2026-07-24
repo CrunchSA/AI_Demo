@@ -77,18 +77,18 @@ If these checks pass, you can skip clean setup components that already exist and
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/ciphertrust-ai-perimeter.git
-cd ciphertrust-ai-perimeter
+git clone https://github.com/CrunchSA/AI_Demo.git
+cd AI_Demo
 
 # Build the Streamlit application image
-docker build -t ciphertrust-ai-perimeter:1.0 .
+docker build -t ai-demo:1.0 .
 
 # Tag for your registry
-docker tag ciphertrust-ai-perimeter:1.0 \
-  registry.example.com/your-team/ciphertrust-ai-perimeter:1.0
+docker tag ai-demo:1.0 \
+  registry.example.com/your-team/ai-demo:1.0
 
 # Push to registry
-docker push registry.example.com/your-team/ciphertrust-ai-perimeter:1.0
+docker push registry.example.com/your-team/ai-demo:1.0
 ```
 
 ### Dockerfile (Reference)
@@ -531,7 +531,7 @@ spec:
     spec:
       containers:
       - name: streamlit
-        image: registry.example.com/your-team/ciphertrust-ai-perimeter:1.0
+        image: registry.example.com/your-team/ai-demo:1.0
         ports:
         - containerPort: 8501
           name: http
@@ -875,7 +875,7 @@ spec:
 ```bash
 # Update image version
 kubectl set image deployment/streamlit-app \
-  streamlit=registry.example.com/your-team/ciphertrust-ai-perimeter:1.1
+  streamlit=registry.example.com/your-team/ai-demo:1.1
 
 # Monitor rollout
 kubectl rollout status deployment/streamlit-app
