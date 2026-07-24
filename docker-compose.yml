@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # Streamlit UI Application
   streamlit-app:
@@ -22,7 +20,6 @@ services:
       # - cte-protected-volume:/data:ro
     depends_on:
       - ollama-service
-      - crdp-service
     networks:
       - ciphertrust-net
     healthcheck:
@@ -51,8 +48,9 @@ services:
       timeout: 10s
       retries: 3
 
-  # Thales CipherTrust CRDP Service (placeholder)
-  # Note: Replace with actual Thales CRDP container or external service URL
+  # Thales CipherTrust CRDP Service (optional placeholder)
+  # This service is disabled by default because the image is a template.
+  # To use local CRDP, set a real image and run with --profile local-crdp.
   crdp-service:
     image: ciphertrust-crdp:latest
     container_name: crdp-protection-service
@@ -62,10 +60,8 @@ services:
       - CRDP_POLICY=${CRDP_POLICY:-llm-ssn-tokenize-policy}
     networks:
       - ciphertrust-net
-    # Uncomment if running external CRDP instance
-    # Comment out if using actual Thales container
     profiles:
-      - disabled
+      - local-crdp
 
 volumes:
   ollama-models:

@@ -4,7 +4,7 @@ import re
 import os
 
 # --- Network Configuration & Fail-Safe Normalization ---
-CRDP_BASE = os.getenv("CRDP_URL", "http://crdpdemo/v1")
+CRDP_BASE = os.getenv("CRDP_URL", "http://crdp-service:8090/v1")
 
 # Clean up trailing routes if passed erroneously via deployment variables
 CRDP_BASE = CRDP_BASE.rstrip("/")
@@ -16,10 +16,10 @@ elif CRDP_BASE.endswith("/reveal"):
 CRDP_PROTECT_URL = f"{CRDP_BASE}/protect"
 CRDP_REVEAL_URL = f"{CRDP_BASE}/reveal"
 
-OLLAMA_CHAT_URL = os.getenv("OLLAMA_URL", "http://10.43.10.85:11434/api/chat")
+OLLAMA_CHAT_URL = os.getenv("OLLAMA_URL", "http://ollama-service:11434/api/chat")
 CRDP_POLICY = os.getenv("CRDP_POLICY", "llm-ssn-tokenize-policy")
 MODEL_NAME = os.getenv("MODEL_NAME", "qwen2.5:1.5b")
-KNOWLEDGE_PATH = "/data/enterprise_knowledge.txt"
+KNOWLEDGE_PATH = os.getenv("KNOWLEDGE_PATH", "/data/enterprise_knowledge.txt")
 
 # --- Web UI Custom Workspace Setup ---
 st.set_page_config(page_title="CipherTrust AI Perimeter", layout="wide")

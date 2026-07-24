@@ -69,8 +69,23 @@ She has full access to all internal documentation.
 
 ### 4. Run Locally with Docker Compose
 
+Choose one local CRDP route:
+
+**Route A (Recommended): External or Existing CRDP Endpoint**
+- Set `CRDP_URL` in `.env` to your reachable Thales CRDP endpoint.
+- Start the local app + Ollama stack:
+
 ```bash
-docker-compose up --build
+docker compose up --build
+```
+
+**Route B: Local CRDP Container (Advanced / Bring-Your-Own Image)**
+- Set a real CRDP image for `crdp-service` in `docker-compose.yml` (the default image is a placeholder).
+- Keep `CRDP_URL=http://crdp-service:8090/v1` in `.env`.
+- Start with the CRDP profile enabled:
+
+```bash
+docker compose --profile local-crdp up --build
 ```
 
 Visit [http://localhost:8501](http://localhost:8501) in your browser.
@@ -168,10 +183,16 @@ See [DEMO_SCRIPT.md](DEMO_SCRIPT.md) for a complete live demonstration walkthrou
 ## 🎬 Deployment
 
 ### Local Development
-   The README's Docker instructions are for a local demo workflow on a single machine. They use `docker-compose.yml` to run the Streamlit app and Ollama together, mount a local `./data` directory, and expose the UI on `localhost:8501`.
+   The README's Docker instructions are for a local demo workflow on a single machine. By default, `docker-compose.yml` runs Streamlit + Ollama and expects CRDP to be external via `CRDP_URL`. If you provide a real local CRDP container image, you can enable the optional `local-crdp` profile to run CRDP in the same Compose project.
 
 ```bash
-docker-compose up --build
+docker compose up --build
+```
+
+For local CRDP profile mode:
+
+```bash
+docker compose --profile local-crdp up --build
 ```
 
 ### Kubernetes Production
